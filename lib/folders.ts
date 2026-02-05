@@ -74,14 +74,19 @@ export function buildFolderTree(folders: FolderNode[], files: FolderNode[]): Fol
     const node = itemMap.get(item.id)!;
     
     if (!item.parent_id) {
+      // parent_id가 없는 경우 루트에 추가
       rootItems.push(node);
     } else {
       const parent = itemMap.get(item.parent_id);
       if (parent) {
+        // 부모가 있으면 부모의 children에 추가
         if (!parent.children) {
           parent.children = [];
         }
         parent.children.push(node);
+      } else {
+        // 부모를 찾을 수 없으면 (삭제되지 않은 폴더의 파일인 경우) 루트에 추가
+        rootItems.push(node);
       }
     }
   });
@@ -364,23 +369,31 @@ export async function fetchDeletedFolders(userId: string): Promise<FolderNode[]>
     throw error;
   }
 
-  if (!deletedFolders || deletedFolders.length === 0) {
-    return [];
+  // 삭제된 폴더의 하위 항목들
+  let allChildFolders: FolderNode[] = [];
+  let allChildFiles: FolderNode[] = [];
+
+  if (deletedFolders && deletedFolders.length > 0) {
+    // 삭제된 폴더들의 ID 목록
+    const deletedFolderIds = deletedFolders.map(f => f.id);
+
+    // 모든 하위 항목들 가져오기
+    const childItems = await fetchDeletedFolderChildren(deletedFolderIds, userId);
+    allChildFolders = childItems.folders;
+    allChildFiles = childItems.files;
   }
-
-  // 삭제된 폴더들의 ID 목록
-  const deletedFolderIds = deletedFolders.map(f => f.id);
-
-  // 모든 하위 항목들 가져오기
-  const { folders: allChildFolders, files: allChildFiles } = 
-    await fetchDeletedFolderChildren(deletedFolderIds, userId);
 
   // 삭제된 파일들도 가져오기 (폴더에 속하지 않은 독립적으로 삭제된 파일)
   const deletedFiles = await fetchDeletedFiles(userId);
 
+  // 삭제된 폴더가 없고 삭제된 파일도 없으면 빈 배열 반환
+  if ((!deletedFolders || deletedFolders.length === 0) && deletedFiles.length === 0) {
+    return [];
+  }
+
   // 모든 폴더와 파일을 합쳐서 트리 구조로 빌드
   const allFolders = [
-    ...deletedFolders.map(folder => ({
+    ...(deletedFolders || []).map(folder => ({
       id: folder.id,
       name: folder.name,
       type: 'folder' as const,
@@ -461,8 +474,89 @@ export async function restoreFolderInDB(id: string): Promise<void> {
 
 /**
  * DB에서 폴더를 영구 삭제합니다 (실제 DELETE).
+ * 폴더 내부의 모든 파일도 Storage와 DB에서 완전히 삭제됩니다.
  */
 export async function permanentlyDeleteFolderInDB(id: string): Promise<void> {
+  // 재귀적으로 하위 폴더 ID들을 가져오는 함수
+  const getAllChildFolderIds = async (parentId: string): Promise<string[]> => {
+    const { data: childFolders, error } = await supabase
+      .from('folders')
+      .select('id')
+      .eq('parent_id', parentId);
+
+    if (error) {
+      console.error('Error fetching child folders:', error);
+      return [];
+    }
+
+    const childIds = (childFolders || []).map(f => f.id);
+    const allChildIds = [...childIds];
+
+    // 재귀적으로 하위 폴더들의 ID도 가져오기
+    for (const childId of childIds) {
+      const nestedIds = await getAllChildFolderIds(childId);
+      allChildIds.push(...nestedIds);
+    }
+
+    return allChildIds;
+  };
+
+  // 모든 폴더 ID (부모 + 모든 하위 폴더)
+  const allFolderIds = [id, ...(await getAllChildFolderIds(id))];
+
+  // 모든 폴더에 속한 파일들의 메타데이터 조회 (storage_path 포함)
+  const { data: files, error: filesError } = await supabase
+    .from('files')
+    .select('id, storage_path')
+    .in('folder_id', allFolderIds);
+
+  if (filesError) {
+    console.error('Error fetching files for deletion:', filesError);
+    // 파일 조회 실패해도 폴더 삭제는 진행
+  }
+
+  // Storage에서 파일들 삭제
+  if (files && files.length > 0) {
+    const storagePaths = files.map(f => f.storage_path).filter(Boolean);
+    
+    if (storagePaths.length > 0) {
+      const { error: storageError } = await supabase.storage
+        .from('files')
+        .remove(storagePaths);
+
+      if (storageError) {
+        console.error('Error deleting files from storage:', storageError);
+        // Storage 삭제 실패해도 DB 삭제는 진행
+      }
+    }
+
+    // DB에서 파일들 삭제
+    const { error: deleteFilesError } = await supabase
+      .from('files')
+      .delete()
+      .in('folder_id', allFolderIds);
+
+    if (deleteFilesError) {
+      console.error('Error deleting files from DB:', deleteFilesError);
+      // 파일 삭제 실패해도 폴더 삭제는 진행
+    }
+  }
+
+  // DB에서 모든 하위 폴더 삭제
+  if (allFolderIds.length > 1) {
+    const childFolderIds = allFolderIds.slice(1); // 부모 폴더 제외
+    const { error: childFoldersError } = await supabase
+      .from('folders')
+      .delete()
+      .in('id', childFolderIds);
+
+    if (childFoldersError) {
+      console.error('Error deleting child folders:', childFoldersError);
+      throw childFoldersError;
+    }
+  }
+
+  // DB에서 부모 폴더 삭제
   const { error } = await supabase
     .from('folders')
     .delete()
