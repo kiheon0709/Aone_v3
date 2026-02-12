@@ -148,9 +148,9 @@ export default function FolderQuestionsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative w-[min(950px,95vw)] max-h-[90vh] overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
-        <div className="p-5 border-b border-border flex items-center justify-between">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose} />
+      <div className="relative w-[min(950px,95vw)] max-h-[90vh] overflow-hidden rounded-2xl border border-glass-border bg-glass-surface backdrop-blur-xl shadow-2xl">
+        <div className="p-5 border-b border-glass-border flex items-center justify-between">
           <div>
             <div className="text-white font-bold text-lg">{folderName} · 폴더 족보</div>
             <div className="text-xs text-text-secondary mt-1">
@@ -168,10 +168,10 @@ export default function FolderQuestionsModal({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-5 overflow-y-auto max-h-[calc(90vh-72px)]">
           <div className="space-y-3">
             <div className="text-sm text-white font-semibold">폴더 전체 요약 (읽기전용)</div>
-            <div className="rounded-xl border border-border bg-background p-3">
+            <div className="rounded-xl border border-glass-border bg-glass-100 p-3">
               {hasSummary ? (
                 <div className="tiptap-readonly-dark">
-                  <TipTapEditor content={summaryContent} onChange={() => {}} editable={false} dark />
+                  <TipTapEditor content={summaryContent} onChange={() => { }} editable={false} dark />
                 </div>
               ) : (
                 <div className="text-text-secondary text-sm">
@@ -182,13 +182,13 @@ export default function FolderQuestionsModal({
 
             <div className="text-sm text-white font-semibold">족보 텍스트 (선택)</div>
             <textarea
-              className="w-full min-h-[140px] rounded-xl border border-border bg-background text-white p-3 text-sm placeholder:text-gray-500"
+              className="w-full min-h-[140px] rounded-xl border border-glass-border bg-glass-100 text-white p-3 text-sm placeholder:text-gray-500 focus:bg-glass-200 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
               placeholder="족보 텍스트를 붙여넣거나, 텍스트 파일(.txt/.md)을 업로드하세요."
               value={jokboText}
               onChange={(e) => setJokboText(e.target.value)}
             />
             <div className="flex items-center gap-3">
-              <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 bg-surface border border-border rounded-lg text-white hover:bg-white/5 transition-colors text-sm">
+              <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 bg-glass-surface border border-glass-border rounded-lg text-white hover:bg-white/10 transition-colors text-sm">
                 <Upload className="w-4 h-4" />
                 텍스트 파일 업로드
                 <input
@@ -223,7 +223,7 @@ export default function FolderQuestionsModal({
 
           <div className="space-y-3">
             <div className="text-sm text-white font-semibold">생성된 문제</div>
-            <div className="rounded-xl border border-border bg-background p-3 min-h-[320px]">
+            <div className="rounded-xl border border-glass-border bg-glass-100 p-3 min-h-[320px]">
               {history.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-3 text-xs">
                   {history.map((h) => (
@@ -234,9 +234,8 @@ export default function FolderQuestionsModal({
                         setQuestions(h.questions);
                         setJokboText(h.jokbo_text || "");
                       }}
-                      className={`px-3 py-1 rounded-lg border ${
-                        selectedHistoryId === h.id ? "border-primary text-primary bg-primary/10" : "border-border text-text-secondary hover:bg-white/5"
-                      }`}
+                      className={`px-3 py-1 rounded-lg border ${selectedHistoryId === h.id ? "border-primary text-primary bg-primary/10" : "border-border text-text-secondary hover:bg-white/5"
+                        }`}
                     >
                       <span className="inline-flex items-center gap-1">
                         <Clock3 className="w-3 h-3" />
@@ -260,7 +259,7 @@ export default function FolderQuestionsModal({
               {questions && !loading && (
                 <div className="space-y-4 text-sm text-white">
                   {questions.map((q, idx) => (
-                    <div key={idx} className="border border-border rounded-lg p-3 bg-surface">
+                    <div key={idx} className="border border-glass-border rounded-lg p-3 bg-glass-card/30">
                       <div className="text-primary font-semibold mb-1">
                         Q{idx + 1} {q.difficulty ? `· ${q.difficulty}` : ""}
                       </div>

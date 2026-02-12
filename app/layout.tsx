@@ -16,8 +16,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" suppressHydrationWarning>
+    <html lang="ko">
       <body className="antialiased">
+        <div className="liquid-bg-container">
+          <div className="liquid-blob"></div>
+          <div className="liquid-blob"></div>
+          <div className="liquid-blob"></div>
+          <div className="liquid-blob"></div>
+        </div>
         <FolderProvider>
           {children}
         </FolderProvider>

@@ -25,9 +25,9 @@ export default function ConfirmDeleteModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
-        className="bg-surface rounded-3xl shadow-2xl w-full max-w-md border border-border overflow-hidden"
+        className="bg-glass-surface backdrop-blur-xl rounded-3xl shadow-2xl w-full max-w-md border border-glass-border overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-8">

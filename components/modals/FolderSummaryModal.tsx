@@ -33,9 +33,9 @@ export default function FolderSummaryModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative w-[min(900px,92vw)] max-h-[85vh] overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
-        <div className="p-5 border-b border-border flex items-center justify-between">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose} />
+      <div className="relative w-[min(900px,92vw)] max-h-[85vh] overflow-hidden rounded-2xl border border-glass-border bg-glass-surface backdrop-blur-xl shadow-2xl">
+        <div className="p-5 border-b border-glass-border flex items-center justify-between">
           <div>
             <div className="text-white font-bold text-lg">{title}</div>
             <div className="text-xs text-text-secondary mt-1">
@@ -67,7 +67,7 @@ export default function FolderSummaryModal({
             </div>
           ) : (
             <div className="tiptap-readonly-dark">
-              <TipTapEditor content={summaryContent} onChange={() => {}} editable={false} dark />
+              <TipTapEditor content={summaryContent} onChange={() => { }} editable={false} dark />
             </div>
           )}
         </div>

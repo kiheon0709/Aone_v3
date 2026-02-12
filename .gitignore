@@ -43,4 +43,24 @@ aonejin/
 DOCS/
 docs/
 
-gitignore/
+# IDE 설정 파일
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+
+# Supabase 로컬
+.supabase/
+
+# 터보팩 캐시
+.turbo/
+
+# 추가 운영체제 파일
+Thumbs.db
+
+# 임시 파일
+*.tmp
+.cache/
+.temp/

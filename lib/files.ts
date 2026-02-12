@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { getCurrentUser } from './auth';
+import { generatePdfThumbnail, blobToFile } from './pdfThumbnail';
 
 export interface FileMetadata {
   id: string;
@@ -13,6 +14,8 @@ export interface FileMetadata {
   user_id: string;
   created_at: string;
   deleted_at?: string | null;
+  thumbnail_path?: string | null;
+  thumbnail_url?: string | null; // Signed URL for thumbnail
 }
 
 /**
@@ -60,6 +63,40 @@ export async function uploadFileToStorage(
 }
 
 /**
+ * 썸네일 이미지를 Supabase Storage에 업로드합니다.
+ */
+export async function uploadThumbnailToStorage(
+  thumbnailBlob: Blob,
+  userId: string,
+  folderId: string | null,
+  originalFileName: string
+): Promise<string> {
+  const timestamp = Date.now();
+  const sanitizedFileName = originalFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+  // PNG 파일로 저장
+  const thumbnailPath = `${userId}/${folderId || 'root'}/thumbnails/${timestamp}-${sanitizedFileName}_thumb.png`;
+
+  // Blob을 File 객체로 변환
+  const thumbnailFile = new File([thumbnailBlob], `${sanitizedFileName}_thumb.png`, {
+    type: 'image/png',
+  });
+
+  const { data, error } = await supabase.storage
+    .from('files')
+    .upload(thumbnailPath, thumbnailFile, {
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+  if (error) {
+    console.error('Error uploading thumbnail:', error);
+    throw new Error(`썸네일 업로드 실패: ${error.message}`);
+  }
+
+  return thumbnailPath;
+}
+
+/**
  * 파일 메타데이터를 DB에 저장합니다.
  */
 export async function saveFileMetadata(
@@ -70,6 +107,7 @@ export async function saveFileMetadata(
   additionalMetadata?: {
     duration?: number;
     page_count?: number;
+    thumbnail_path?: string;
   }
 ): Promise<FileMetadata> {
   // 파일 타입 확인
@@ -97,6 +135,7 @@ export async function saveFileMetadata(
       size: file.size,
       duration: additionalMetadata?.duration,
       page_count: additionalMetadata?.page_count,
+      thumbnail_path: additionalMetadata?.thumbnail_path,
       user_id: userId,
     })
     .select()
@@ -126,8 +165,28 @@ export async function uploadFile(
   // Storage에 업로드
   const storagePath = await uploadFileToStorage(file, user.id, folderId);
 
+  // PDF인 경우 썸네일 생성 및 업로드
+  let thumbnailPath: string | undefined;
+  if (file.type === 'application/pdf') {
+    try {
+      const thumbnailBlob = await generatePdfThumbnail(file);
+      thumbnailPath = await uploadThumbnailToStorage(
+        thumbnailBlob,
+        user.id,
+        folderId,
+        file.name
+      );
+      console.log('PDF 썸네일 생성 완료:', thumbnailPath);
+    } catch (error) {
+      console.error('PDF 썸네일 생성 실패 (파일 업로드는 계속 진행):', error);
+      // 썸네일 생성 실패해도 파일 업로드는 계속 진행
+    }
+  }
+
   // DB에 메타데이터 저장
-  const fileMetadata = await saveFileMetadata(file, storagePath, folderId, user.id);
+  const fileMetadata = await saveFileMetadata(file, storagePath, folderId, user.id, {
+    thumbnail_path: thumbnailPath,
+  });
 
   return fileMetadata;
 }
@@ -158,7 +217,29 @@ export async function fetchFiles(userId: string, folderId?: string | null): Prom
     throw error;
   }
 
-  return data || [];
+  // 썸네일이 있는 파일들에 대해 signed URL 생성
+  const filesWithThumbnails = await Promise.all(
+    (data || []).map(async (file) => {
+      if (file.thumbnail_path) {
+        try {
+          const { data: signedData } = await supabase.storage
+            .from('files')
+            .createSignedUrl(file.thumbnail_path, 86400); // 24시간 유효
+          
+          return {
+            ...file,
+            thumbnail_url: signedData?.signedUrl || null,
+          };
+        } catch (err) {
+          console.error('Error creating signed URL for thumbnail:', err);
+          return { ...file, thumbnail_url: null };
+        }
+      }
+      return file;
+    })
+  );
+
+  return filesWithThumbnails;
 }
 
 /**
@@ -319,6 +400,7 @@ export async function getFileUrl(storagePath: string): Promise<string> {
 
   return data.signedUrl;
 }
+
 
 /**
  * 삭제된 파일 목록을 조회합니다.

@@ -49,7 +49,7 @@ export default function FolderMenu({
   return (
     <div
       ref={menuRef}
-      className="fixed bg-surface rounded-lg shadow-lg border border-border py-2 z-50 min-w-[180px]"
+      className="fixed bg-glass-surface backdrop-blur-xl rounded-xl shadow-2xl border border-glass-border py-2 z-50 min-w-[180px]"
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,

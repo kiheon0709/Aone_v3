@@ -4,28 +4,29 @@ import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   ChevronRight,
-  ChevronDown,
+  ChevronLeft,
   Folder,
   FolderOpen,
   File,
   Plus,
-  MoreVertical,
+  MoreHorizontal,
   Trash2,
-  User as UserIcon,
+  PanelLeftClose,
+  PanelLeftOpen
 } from "lucide-react";
 import { useFolders, FolderNode } from "@/contexts/FolderContext";
 import CreateFolderModal from "@/components/modals/CreateFolderModal";
 import ConfirmDeleteModal from "@/components/modals/ConfirmDeleteModal";
 import FolderMenu from "@/components/layout/FolderMenu";
-import { getCurrentUser } from "@/lib/auth";
-import { User } from "@supabase/supabase-js";
 
 interface SidebarProps {
   onSelectItem: (item: FolderNode) => void;
   selectedItemId?: string;
+  isCollapsed: boolean;
+  toggleSidebar: () => void;
 }
 
-export default function Sidebar({ onSelectItem, selectedItemId }: SidebarProps) {
+export default function Sidebar({ onSelectItem, selectedItemId, isCollapsed, toggleSidebar }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { folders, createFolder, deleteFolder, updateFolder, createDocument, deleteDocument, updateDocument, moveItem, moveItemBefore } = useFolders();
@@ -43,17 +44,7 @@ export default function Sidebar({ onSelectItem, selectedItemId }: SidebarProps) 
   const [editName, setEditName] = useState("");
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
-  const [hasMounted, setHasMounted] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    setHasMounted(true);
-    const loadUser = async () => {
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
-    };
-    loadUser();
-  }, []);
+  const [isDocumentsExpanded, setIsDocumentsExpanded] = useState(true);
 
   const toggleFolder = (folderId: string) => {
     setExpandedFolders(prev => {
@@ -127,7 +118,7 @@ export default function Sidebar({ onSelectItem, selectedItemId }: SidebarProps) 
           await deleteDocument(itemToDelete.id);
         }
         if (selectedItemId === itemToDelete.id) {
-          onSelectItem({} as FolderNode); // 선택 해제
+          onSelectItem({} as FolderNode);
         }
         setItemToDelete(null);
         setShowDeleteModal(false);
@@ -138,184 +129,74 @@ export default function Sidebar({ onSelectItem, selectedItemId }: SidebarProps) 
     }
   };
 
-  // 드래그 앤 드롭 핸들러
   const handleDragStart = (e: React.DragEvent, itemId: string) => {
     setDraggedItemId(itemId);
     e.dataTransfer.effectAllowed = "move";
-    // 드래그 이미지 커스터마이징 (선택사항)
-    if (e.dataTransfer.setDragImage) {
-      const dragImage = document.createElement("div");
-      dragImage.innerHTML = "이동 중...";
-      dragImage.style.position = "absolute";
-      dragImage.style.top = "-1000px";
-      document.body.appendChild(dragImage);
-      e.dataTransfer.setDragImage(dragImage, 0, 0);
-      setTimeout(() => document.body.removeChild(dragImage), 0);
-    }
   };
-
-  const handleDragOver = (e: React.DragEvent, itemId: string, itemType: "folder" | "document") => {
+  const handleDragOver = (e: React.DragEvent, itemId: string) => {
     e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = "move";
-    
-    // 모든 아이템에 드롭 가능 (형제로 이동)
-    if (draggedItemId && draggedItemId !== itemId) {
-      setDragOverItemId(itemId);
-    }
+    if (draggedItemId && draggedItemId !== itemId) setDragOverItemId(itemId);
   };
-
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = () => setDragOverItemId(null);
+  const handleDrop = async (e: React.DragEvent, targetItemId: string) => {
     e.preventDefault();
-    e.stopPropagation();
-    // 마우스가 자식 요소로 이동한 경우가 아니면 드롭 타겟 해제
-    const target = e.currentTarget as HTMLElement;
-    const relatedTarget = e.relatedTarget as HTMLElement;
-    if (!target.contains(relatedTarget)) {
-      setDragOverItemId(null);
-    }
-  };
-
-  const handleDrop = async (e: React.DragEvent, targetItemId: string, targetItemType: "folder" | "document") => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!draggedItemId || draggedItemId === targetItemId) {
-      setDraggedItemId(null);
-      setDragOverItemId(null);
-      return;
-    }
-
+    if (!draggedItemId || draggedItemId === targetItemId) return;
     try {
-      // 타겟 아이템의 형제로 이동 (타겟 바로 다음에 위치)
-      moveItemBefore(draggedItemId, targetItemId);
-      
-      setDraggedItemId(null);
-      setDragOverItemId(null);
-    } catch (err: any) {
-      console.error("이동 실패:", err);
-      alert("이동에 실패했습니다: " + err.message);
-    }
-  };
-
-  const handleDragEnd = () => {
+      await moveItemBefore(draggedItemId, targetItemId);
+    } catch (err: any) { alert(err.message); }
     setDraggedItemId(null);
     setDragOverItemId(null);
   };
 
-  const renderFolderTree = (items: FolderNode[], level = 0, parentPath: boolean[] = []) => {
-    // 폴더를 먼저, 문서를 나중에 정렬
+  const renderFolderTree = (items: FolderNode[], level = 0) => {
     const sortedItems = [...items].sort((a, b) => {
-      // 폴더가 문서보다 먼저 나오도록
       if (a.type === "folder" && b.type === "document") return -1;
       if (a.type === "document" && b.type === "folder") return 1;
-      // 같은 타입이면 이름순으로 정렬
       return a.name.localeCompare(b.name);
     });
 
-    return sortedItems.map((item, index) => {
-      const isLast = index === sortedItems.length - 1;
-      const currentPath = [...parentPath, !isLast];
+    return sortedItems.map((item) => {
       const isExpanded = expandedFolders.has(item.id);
       const isSelected = selectedItemId === item.id;
       const isHovered = hoveredItemId === item.id;
       const hasChildren = item.children && item.children.length > 0;
-
       const isDragging = draggedItemId === item.id;
       const isDragOver = dragOverItemId === item.id;
 
       return (
-        <div key={item.id} className="relative">
-          {/* 트리 구조 세로선 - 각 레벨마다 (항목 컨테이너 밖에 배치) */}
-          {level > 0 && (
-            <>
-              {/* 부모 레벨들의 세로선 (형제가 있을 때만 아래로 이어짐) */}
-              {parentPath.map((hasSibling, idx) => {
-                if (!hasSibling) return null;
-                return (
-                  <div
-                    key={`parent-${idx}-${item.id}`}
-                    className="absolute top-0 bottom-0 w-[0.5px] bg-gray-300/30 pointer-events-none z-0"
-                    style={{ left: `${12 + idx * 20 + 9.5}px` }}
-                  />
-                );
-              })}
-              {/* 현재 레벨의 세로선 (마지막 항목이 아닐 때만 아래로 이어짐) */}
-              {!isLast && (
-                <div 
-                  key={`current-${item.id}`}
-                  className="absolute top-0 bottom-0 w-[0.5px] bg-gray-300/30 pointer-events-none z-0"
-                  style={{ left: `${12 + (level - 1) * 20 + 9.5}px` }}
-                />
-              )}
-              {/* 현재 항목 앞의 가로선 (세로선에서 아이콘까지) - "ㄱ"자 형태 */}
-              <div 
-                key={`horizontal-${item.id}`}
-                className="absolute top-[18px] h-[0.5px] bg-gray-300/30 pointer-events-none z-0"
-                style={{ 
-                  left: `${12 + (level - 1) * 20 + 9.5}px`,
-                  width: `11px`
-                }}
-              />
-            </>
-          )}
+        <div key={item.id} className="relative select-none">
           <div
             draggable
             onDragStart={(e) => handleDragStart(e, item.id)}
-            onDragOver={(e) => handleDragOver(e, item.id, item.type)}
+            onDragOver={(e) => handleDragOver(e, item.id)}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, item.id, item.type)}
-            onDragEnd={handleDragEnd}
+            onDrop={(e) => handleDrop(e, item.id)}
             className={`
-              relative flex items-center justify-between py-2 rounded-lg cursor-pointer transition-colors min-h-[36px] border-2
-              ${isSelected ? "bg-primary/20 text-primary font-medium border-transparent" : "border-transparent text-gray-400"}
-              ${isDragging ? "opacity-50" : ""}
-              ${isDragOver ? "bg-primary/20 border-primary border-dashed" : ""}
-              ${!isDragOver && !isSelected ? "hover:bg-white/5 hover:text-white" : ""}
+              relative flex items-center justify-between px-2 py-1.5 mb-0.5 rounded-lg cursor-pointer transition-all duration-200
+              ${isSelected ? "bg-primary/10 text-primary shadow-sm" : "text-gray-500 hover:bg-black/5 hover:text-gray-900"}
+              ${isDragging ? "opacity-40" : ""}
+              ${isDragOver ? "ring-1 ring-primary/50 bg-primary/5" : ""}
             `}
-            style={{ 
-              paddingLeft: `${12 + level * 20}px`,
-              paddingRight: '12px'
-            }}
+            style={{ paddingLeft: `${8 + level * 16}px` }}
             onClick={() => {
               onSelectItem(item);
-              // 폴더인 경우 클릭 시 확장/축소 토글
-              if (item.type === "folder") {
-                toggleFolder(item.id);
-              }
+              if (item.type === "folder") toggleFolder(item.id);
             }}
             onMouseEnter={() => setHoveredItemId(item.id)}
             onMouseLeave={() => setHoveredItemId(null)}
           >
-            <div className="flex items-center gap-2 flex-1 min-w-0 relative z-10">
+            <div className={`flex items-center gap-2.5 flex-1 min-w-0`}>
               {item.type === "folder" ? (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleFolder(item.id);
-                  }}
-                  className="p-0.5 hover:bg-white/10 rounded flex-shrink-0"
-                >
-                  {isExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
-                  )}
-                </button>
-              ) : (
-                // 문서의 경우 화살표 공간만큼 여백 추가 (정렬 맞추기)
-                <div className="w-5 flex-shrink-0" />
-              )}
-              
-              <div className="flex-shrink-0">
+                <div className={`transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}>
+                  <ChevronRight className="w-3.5 h-3.5 opacity-70" />
+                </div>
+              ) : <div className="w-3.5" />}
+
+              <div className={`transition-colors duration-200 ${isSelected ? "text-primary scale-110" : "text-gray-400 group-hover:text-gray-500"}`} title={item.name}>
                 {item.type === "folder" ? (
-                  isExpanded ? (
-                    <FolderOpen className="w-5 h-5 text-[#fbc02d]" />
-                  ) : (
-                    <Folder className="w-5 h-5 text-[#fbc02d]" />
-                  )
+                  isExpanded ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />
                 ) : (
-                  <File className="w-5 h-5 text-primary" />
+                  <File className="w-4 h-4" />
                 )}
               </div>
 
@@ -325,24 +206,13 @@ export default function Sidebar({ onSelectItem, selectedItemId }: SidebarProps) 
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   onBlur={handleEditSubmit}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleEditSubmit();
-                    } else if (e.key === "Escape") {
-                      setEditingItem(null);
-                      setEditName("");
-                    }
-                  }}
-                  className="text-sm text-white bg-background border border-primary rounded px-2 py-1 flex-1 min-w-0 placeholder:text-text-secondary"
+                  onKeyDown={(e) => e.key === "Enter" && handleEditSubmit()}
+                  className="bg-transparent border-b border-primary text-sm text-gray-900 focus:outline-none w-full"
                   autoFocus
                   onClick={(e) => e.stopPropagation()}
                 />
               ) : (
-                <span
-                  className={`text-sm truncate flex-1 min-w-0 ${
-                    isSelected ? "text-primary" : "text-white/90"
-                  }`}
-                >
+                <span className={`text-[13px] font-medium truncate leading-none pt-0.5 ${isSelected ? 'text-primary font-semibold' : ''}`}>
                   {item.name}
                 </span>
               )}
@@ -351,16 +221,17 @@ export default function Sidebar({ onSelectItem, selectedItemId }: SidebarProps) 
             {isHovered && !editingItem && (
               <button
                 onClick={(e) => handleMenuClick(e, item)}
-                className="p-1 hover:bg-white/10 rounded flex-shrink-0 ml-2"
+                className="opacity-0 group-hover:opacity-100 hover:bg-black/5 p-1 rounded transition-all"
               >
-                <MoreVertical className="w-4 h-4 text-text-secondary" />
+                <MoreHorizontal className="w-3.5 h-3.5 text-gray-400" />
               </button>
             )}
           </div>
 
           {item.type === "folder" && isExpanded && hasChildren && (
-            <div>
-              {renderFolderTree(item.children!, level + 1, currentPath)}
+            <div className="relative">
+              <div className="absolute left-[15px] top-0 bottom-0 w-[1px] bg-black/5" style={{ left: `${15 + level * 16}px` }}></div>
+              {renderFolderTree(item.children!, level + 1)}
             </div>
           )}
         </div>
@@ -368,93 +239,111 @@ export default function Sidebar({ onSelectItem, selectedItemId }: SidebarProps) 
     });
   };
 
+  // IF COLLAPSED: Render ONLY the toggle button absolutely positioned at top-left.
+  // We keep a small width (w-[60px]) to reserve space so the Header Search Bar doesn't overlap.
+  // IF COLLAPSED: Render nothing (or minimal hidden state). 
+  // The expand button is now handled in the Header component.
+  // Render sidebar with smooth transition
+  // Render sidebar with smooth transition
   return (
-    <div className="w-64 h-screen bg-sidebar border-r border-border flex flex-col">
-      {/* 헤더 */}
-      <div className="p-4 border-b border-border">
-        <button
-          onClick={() => router.push("/dashboard")}
-          className="text-2xl font-bold text-white hover:opacity-80 transition-opacity cursor-pointer flex items-center gap-2"
-        >
-          <span className="text-primary italic">A</span>one
-        </button>
-      </div>
-
-      {/* 폴더 트리 */}
-      <div 
-        className="flex-1 overflow-y-auto p-3"
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (draggedItemId) {
-            e.dataTransfer.dropEffect = "move";
-          }
-        }}
-        onDrop={async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          // 빈 영역에 드롭하는 경우는 루트 레벨의 끝에 추가
-          if (draggedItemId) {
-            try {
-              await moveItem(draggedItemId, null); // 루트 레벨로 이동
-            } catch (err: any) {
-              console.error("이동 실패:", err);
-              alert("이동에 실패했습니다: " + err.message);
-            }
-          }
-          setDraggedItemId(null);
-          setDragOverItemId(null);
-        }}
-      >
-        <div className="mb-3">
-          <div className="text-[10px] font-bold text-gray-500 uppercase px-3 mb-2 tracking-widest">
-            문서
-          </div>
-          {renderFolderTree(folders)}
-        </div>
-      </div>
-
-      {/* 하단 */}
-      <div className="border-t border-border">
-        <div className="p-4 text-center">
+    <div
+      className={`hidden md:flex flex-col h-full glass-panel rounded-3xl z-50 transition-all duration-500 ease-in-out relative group overflow-hidden min-w-0 ${isCollapsed ? "!w-0 !p-0 !border-0 !m-0 shadow-none bg-transparent" : "w-[280px]"
+        }`}
+    >
+      {/* Fixed width container to prevent content squishing during transition */}
+      <div className="min-w-[280px] h-full flex flex-col">
+        {/* Brand Header */}
+        <div className="flex items-center justify-between p-6 pb-4 relative group/header">
           <button
-            onClick={() => handleCreateFolder(null)}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+            onClick={() => { window.location.href = '/dashboard'; }}
+            className="flex items-center gap-3 hover:bg-black/5 rounded-2xl px-2 py-1 transition-colors text-left"
           >
-            <Plus className="w-4 h-4" />
-            <span className="font-semibold text-sm">새 폴더</span>
-          </button>
-        </div>
-
-        <div className="px-4 pb-2">
-          <button
-            onClick={() => router.push("/trash")}
-            className={`w-full flex items-center gap-2 py-2 px-4 rounded-lg transition-colors ${pathname === "/trash" ? "bg-primary/20 text-primary" : "text-gray-400 hover:bg-white/5 hover:text-white"
-              }`}
-          >
-            <Trash2 className="w-4 h-4" />
-            <span className="font-medium text-sm">휴지통</span>
-          </button>
-        </div>
-
-        <div className="p-4 border-t border-border mt-2">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-white font-semibold">
-              <UserIcon className="w-4 h-4 text-primary" />
+            <div className="w-11 h-11 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
+              <span className="text-white font-bold text-2xl italic">A</span>
             </div>
-            {hasMounted && (
-              <div className="flex-1 overflow-hidden">
-                <div className="text-xs font-semibold text-white truncate">사용자</div>
-                <div className="text-[10px] text-gray-500 truncate lowercase">
-                  {user?.email || "guest@example.com"}
+            <span className="text-2xl font-bold text-gray-900">
+              Aone
+            </span>
+          </button>
+
+          <button
+            onClick={toggleSidebar}
+            className="opacity-0 group-hover/header:opacity-100 absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/50 hover:bg-white rounded-full text-gray-400 hover:text-gray-900 transition-all shadow-sm border border-transparent hover:border-gray-100"
+            title="사이드바 접기"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="h-[1px] bg-gray-200/80 mx-5 mb-4" />
+
+        {/* Navigation Tree */}
+        <div className="flex-1 overflow-y-auto px-3 py-2 scrollbar-hide w-full">
+          {/* 최상위 "문서" 노드 */}
+          <div className="relative select-none">
+            <div
+              className={`
+                relative flex items-center justify-between px-2 py-1.5 mb-0.5 rounded-lg cursor-pointer transition-all duration-200
+                ${!selectedItemId ? "bg-primary/10 text-primary shadow-sm" : "text-gray-700 hover:bg-black/5 hover:text-gray-900"}
+              `}
+              style={{ paddingLeft: '8px' }}
+              onClick={() => {
+                router.push('/dashboard');
+                setIsDocumentsExpanded(!isDocumentsExpanded);
+              }}
+            >
+              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                <div className={`transition-transform duration-200 ${isDocumentsExpanded ? "rotate-90" : ""}`}>
+                  <ChevronRight className="w-3.5 h-3.5 opacity-70" />
                 </div>
+
+                <div className={`transition-colors duration-200 ${!selectedItemId ? "text-primary" : "text-gray-400"}`} title="문서">
+                  {isDocumentsExpanded ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />}
+                </div>
+
+                <span className={`text-[13px] font-semibold truncate leading-none pt-0.5 ${!selectedItemId ? 'text-primary' : ''}`}>
+                  문서
+                </span>
+              </div>
+            </div>
+
+            {/* 자식 폴더들 */}
+            {isDocumentsExpanded && (
+              <div className="relative">
+                <div className="absolute left-[15px] top-0 bottom-0 w-[1px] bg-black/5"></div>
+                {renderFolderTree(folders, 1)}
               </div>
             )}
           </div>
         </div>
+
+        {/* Bottom Actions */}
+        <div className="p-4 bg-gradient-to-t from-white/50 to-transparent space-y-3">
+          <button
+            onClick={() => handleCreateFolder(null)}
+            className="glass-button flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-gray-600 hover:text-gray-900 group"
+            title="새 폴더"
+          >
+            <div className="flex items-center justify-center transition-colors w-8 h-8 rounded-lg bg-primary/10">
+              <Plus className="w-4 h-4 text-primary transition-colors" />
+            </div>
+            <span className="text-sm font-medium">새 폴더</span>
+          </button>
+
+          <button
+            onClick={() => router.push("/trash")}
+            className={`glass-button flex items-center gap-3 w-full px-3 py-2.5 rounded-xl group ${pathname === "/trash" ? "bg-primary/5 text-primary border-primary/20" : "text-gray-600 hover:text-gray-900"}`}
+            title="휴지통"
+          >
+            <div className="flex items-center justify-center transition-colors w-8 h-8 rounded-lg bg-red-500/10">
+              <Trash2 className="w-4 h-4 text-red-500 transition-colors" />
+            </div>
+            <span className="text-sm font-medium">휴지통</span>
+          </button>
+        </div>
       </div>
 
-      {/* 모달들 */}
+      {/* Modals & Menu */}
       <CreateFolderModal
         isOpen={showCreateModal}
         onClose={() => {
@@ -485,11 +374,8 @@ export default function Sidebar({ onSelectItem, selectedItemId }: SidebarProps) 
           onDelete={() => handleDelete(menuState.item!)}
           onCreateFolder={() => handleCreateFolder(menuState.item!.id)}
           onCreateDocument={() => {
-            // 문서 생성은 임시로 이름 입력 받아서 생성
-            const name = prompt("문서 이름을 입력하세요:");
-            if (name && name.trim()) {
-              createDocument(name.trim(), menuState.item!.id);
-            }
+            const name = prompt("문서 이름:");
+            if (name?.trim()) createDocument(name.trim(), menuState.item!.id);
             setMenuState(null);
           }}
         />
@@ -497,4 +383,3 @@ export default function Sidebar({ onSelectItem, selectedItemId }: SidebarProps) 
     </div>
   );
 }
-

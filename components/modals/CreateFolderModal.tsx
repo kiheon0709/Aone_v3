@@ -38,12 +38,12 @@ export default function CreateFolderModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
-        className="bg-surface rounded-3xl shadow-2xl w-full max-w-md border border-border overflow-hidden"
+        className="bg-glass-surface backdrop-blur-xl rounded-3xl shadow-2xl w-full max-w-md border border-glass-border overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-6 border-b border-border">
+        <div className="flex items-center justify-between p-6 border-b border-glass-border">
           <h2 className="text-xl font-bold text-white">{title}</h2>
           <button
             onClick={onClose}
@@ -63,7 +63,7 @@ export default function CreateFolderModal({
               value={folderName}
               onChange={(e) => setFolderName(e.target.value)}
               placeholder="폴더 이름을 입력하세요"
-              className="w-full px-5 py-3 bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-white placeholder:text-gray-600 transition-all shadow-inner"
+              className="w-full px-5 py-3 bg-glass-100 border border-glass-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-white placeholder:text-gray-600 transition-all shadow-inner hover:bg-glass-200 focus:bg-glass-200"
               autoFocus
             />
           </div>
